@@ -52,6 +52,8 @@ namespace Ryujinx.Graphics.Gpu.Engine
 
             BufferManager  = new BufferManager(context);
             TextureManager = new TextureManager(context);
+
+            context.MemoryManager.MemoryUnmapped += _counterCache.MemoryUnmappedHandler;
         }
 
         /// <summary>
@@ -121,6 +123,11 @@ namespace Ryujinx.Graphics.Gpu.Engine
             if (state.QueryModified(MethodOffset.ShaderBaseAddress, MethodOffset.ShaderState))
             {
                 UpdateShaderState(state);
+            }
+
+            if (state.QueryModified(MethodOffset.RasterizeEnable))
+            {
+                UpdateRasterizerState(state);
             }
 
             if (state.QueryModified(MethodOffset.RtColorState,
@@ -224,6 +231,16 @@ namespace Ryujinx.Graphics.Gpu.Engine
             }
 
             CommitBindings();
+        }
+
+        /// <summary>
+        /// Updates Rasterizer primitive discard state based on guest gpu state.
+        /// </summary>
+        /// <param name="state">Current GPU state</param>
+        private void UpdateRasterizerState(GpuState state)
+        {
+            Boolean32 enable = state.Get<Boolean32>(MethodOffset.RasterizeEnable);
+            _context.Renderer.Pipeline.SetRasterizerDiscard(!enable);
         }
 
         /// <summary>
