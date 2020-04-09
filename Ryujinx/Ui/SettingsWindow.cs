@@ -20,6 +20,8 @@ namespace Ryujinx.Ui
         private static ListStore         _gameDirsBoxStore;
         private static VirtualFileSystem _virtualFileSystem;
 
+        private long _systemTimeOffset;
+
 #pragma warning disable CS0649
 #pragma warning disable IDE0044
         [GUI] CheckButton  _errorLogToggle;
@@ -41,6 +43,16 @@ namespace Ryujinx.Ui
         [GUI] ComboBoxText _systemLanguageSelect;
         [GUI] ComboBoxText _systemRegionSelect;
         [GUI] ComboBoxText _systemTimeZoneSelect;
+        [GUI] SpinButton   _systemTimeYearSpin;
+        [GUI] SpinButton   _systemTimeMonthSpin;
+        [GUI] SpinButton   _systemTimeDaySpin;
+        [GUI] SpinButton   _systemTimeHourSpin;
+        [GUI] SpinButton   _systemTimeMinuteSpin;
+        [GUI] Adjustment   _systemTimeYearSpinAdjustment;
+        [GUI] Adjustment   _systemTimeMonthSpinAdjustment;
+        [GUI] Adjustment   _systemTimeDaySpinAdjustment;
+        [GUI] Adjustment   _systemTimeHourSpinAdjustment;
+        [GUI] Adjustment   _systemTimeMinuteSpinAdjustment;
         [GUI] CheckButton  _custThemeToggle;
         [GUI] Entry        _custThemePath;
         [GUI] ToggleButton _browseThemePath;
@@ -81,6 +93,7 @@ namespace Ryujinx.Ui
             _configureController7.Pressed += (sender, args) => ConfigureController_Pressed(sender, args, PlayerIndex.Player7);
             _configureController8.Pressed += (sender, args) => ConfigureController_Pressed(sender, args, PlayerIndex.Player8);
             _configureControllerH.Pressed += (sender, args) => ConfigureController_Pressed(sender, args, PlayerIndex.Handheld);
+
 
             //Setup Currents
             if (ConfigurationState.Instance.Logger.EnableFileLog)
@@ -184,9 +197,10 @@ namespace Ryujinx.Ui
             _custThemePath.Buffer.Text           = ConfigurationState.Instance.Ui.CustomThemePath;
             _graphicsShadersDumpPath.Buffer.Text = ConfigurationState.Instance.Graphics.ShadersDumpPath;
             _fsLogSpinAdjustment.Value           = ConfigurationState.Instance.System.FsGlobalAccessLogMode;
+            _systemTimeOffset                    = ConfigurationState.Instance.System.SystemTimeOffset;
 
-            _gameDirsBox.AppendColumn("", new CellRendererText(), "text", 0);
-            _gameDirsBoxStore  = new ListStore(typeof(string));
+            _gameDirsBox.AppendColumn( "", new CellRendererText(), "text", 0 );
+            _gameDirsBoxStore = new ListStore( typeof( string ) );
             _gameDirsBox.Model = _gameDirsBoxStore;
 
             foreach (string gameDir in ConfigurationState.Instance.Ui.GameDirs.Value)
@@ -200,9 +214,66 @@ namespace Ryujinx.Ui
                 _custThemePathLabel.Sensitive = false;
                 _browseThemePath.Sensitive    = false;
             }
+
+            //Setup System Time Spinners
+            UpdateSystemTimeSpinners();
+        }
+
+        private void UpdateSystemTimeSpinners() 
+        {
+            //Bind System Time Events
+            _systemTimeYearSpin.ValueChanged   -= SystemTimeSpin_ValueChanged;
+            _systemTimeMonthSpin.ValueChanged  -= SystemTimeSpin_ValueChanged;
+            _systemTimeDaySpin.ValueChanged    -= SystemTimeSpin_ValueChanged;
+            _systemTimeHourSpin.ValueChanged   -= SystemTimeSpin_ValueChanged;
+            _systemTimeMinuteSpin.ValueChanged -= SystemTimeSpin_ValueChanged;
+
+            DateTime systemTime = DateTime.Now.AddSeconds( _systemTimeOffset );
+
+            _systemTimeYearSpinAdjustment.Value   = systemTime.Year;
+            _systemTimeMonthSpinAdjustment.Value  = systemTime.Month;
+            _systemTimeDaySpinAdjustment.Value    = systemTime.Day;
+            _systemTimeHourSpinAdjustment.Value   = systemTime.Hour;
+            _systemTimeMinuteSpinAdjustment.Value = systemTime.Minute;
+
+            _systemTimeYearSpin.Text   = systemTime.Year.ToString( "0000" );
+            _systemTimeMonthSpin.Text  = systemTime.Month.ToString( "00" );
+            _systemTimeDaySpin.Text    = systemTime.Day.ToString( "00" );
+            _systemTimeHourSpin.Text   = systemTime.Hour.ToString( "00" );
+            _systemTimeMinuteSpin.Text = systemTime.Minute.ToString( "00" );
+
+            //Bind System Time Events
+            _systemTimeYearSpin.ValueChanged   += SystemTimeSpin_ValueChanged;
+            _systemTimeMonthSpin.ValueChanged  += SystemTimeSpin_ValueChanged;
+            _systemTimeDaySpin.ValueChanged    += SystemTimeSpin_ValueChanged;
+            _systemTimeHourSpin.ValueChanged   += SystemTimeSpin_ValueChanged;
+            _systemTimeMinuteSpin.ValueChanged += SystemTimeSpin_ValueChanged;
+
         }
 
         //Events
+        private void SystemTimeSpin_ValueChanged( Object sender, EventArgs e )
+        {
+            int year = _systemTimeYearSpin.ValueAsInt;
+            int month = _systemTimeMonthSpin.ValueAsInt;
+            int day = _systemTimeDaySpin.ValueAsInt;
+            int hour = _systemTimeHourSpin.ValueAsInt;
+            int minute = _systemTimeMinuteSpin.ValueAsInt;
+
+            if ( !DateTime.TryParse( year + "-" + month + "-" + day + " " + hour + ":" + minute, out DateTime newTime ) ) {
+                UpdateSystemTimeSpinners();
+                return;
+            }
+
+            newTime = newTime.AddSeconds( DateTime.Now.Second ).AddMilliseconds(DateTime.Now.Millisecond);
+            long systemTimeOffset = (long)Math.Ceiling( ( newTime - DateTime.Now ).TotalMinutes ) * 60L;
+
+            if ( _systemTimeOffset != systemTimeOffset ) {
+                _systemTimeOffset = systemTimeOffset;
+                UpdateSystemTimeSpinners();
+            }
+        }
+
         private void AddDir_Pressed(object sender, EventArgs args)
         {
             if (Directory.Exists(_addGameDirBox.Buffer.Text))
@@ -311,6 +382,7 @@ namespace Ryujinx.Ui
             ConfigurationState.Instance.System.Language.Value                  = Enum.Parse<Language>(_systemLanguageSelect.ActiveId);
             ConfigurationState.Instance.System.Region.Value                    = Enum.Parse<Configuration.System.Region>(_systemRegionSelect.ActiveId);
             ConfigurationState.Instance.System.TimeZone.Value                  = _systemTimeZoneSelect.ActiveId;
+            ConfigurationState.Instance.System.SystemTimeOffset.Value          = _systemTimeOffset;
             ConfigurationState.Instance.Ui.CustomThemePath.Value               = _custThemePath.Buffer.Text;
             ConfigurationState.Instance.Graphics.ShadersDumpPath.Value         = _graphicsShadersDumpPath.Buffer.Text;
             ConfigurationState.Instance.Ui.GameDirs.Value                      = gameDirs;
